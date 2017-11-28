@@ -8,11 +8,12 @@ from mock import MagicMock
 from mock import call
 from pyramid import httpexceptions
 import pytest
+from sqlalchemy import inspect
 
 from h.events import AnnotationEvent
 from h.services.annotation_stats import AnnotationStatsService
 from h.services.user import UserService
-from h.models import Annotation
+from h.models import Annotation, Document, Group
 from h.views.admin_users import (
     UserDeletionError,
     UserNotFoundError,
@@ -225,19 +226,40 @@ def test_users_delete_group_creator_error(user_service, fake_delete_user, pyrami
     ]
 
 
+def test_delete_user_removes_empty_groups(db_session, group_with_two_users, pyramid_request):
+    pyramid_request.db = db_session
+    (group, user, other_user, user_ann, other_user_ann) = group_with_two_users
+    db_session.delete(other_user_ann)
+
+    delete_user(pyramid_request, user)
+    pyramid_request.db.flush()   # See https://stackoverflow.com/a/25427235/434243
+
+    assert inspect(group).deleted is True
+
+
+def test_delete_user_keeps_non_empty_groups(db_session, group_with_two_users, pyramid_request):
+    pyramid_request.db = db_session
+    (group, user, other_user, user_ann, other_user_ann) = group_with_two_users
+
+    delete_user(pyramid_request, user)
+    pyramid_request.db.flush()  # See https://stackoverflow.com/a/25427235/434243
+
+    assert inspect(group).deleted is False
+    assert inspect(other_user_ann).deleted is False
+
+
+def test_delete_user_unsets_non_empty_group_creator(db_session, group_with_two_users, pyramid_request):
+    pyramid_request.db = db_session
+    (group, user, other_user, user_ann, other_user_ann) = group_with_two_users
+
+    delete_user(pyramid_request, user)
+
+    assert group.creator is None
+
+
 delete_user_fixtures = pytest.mark.usefixtures('api_storage',
                                                'models',
                                                'user_created_no_groups')
-
-
-@delete_user_fixtures
-def test_delete_user_raises_when_group_creator(models, pyramid_request):
-    user = Mock()
-
-    models.Group.created_by.return_value.count.return_value = 10
-
-    with pytest.raises(UserDeletionError):
-        delete_user(pyramid_request, user)
 
 
 @delete_user_fixtures
@@ -342,3 +364,26 @@ def annotation_stats_service(pyramid_config, db_session):
 def user_created_no_groups(models):
     # By default, pretend that all users are the creators of 0 groups.
     models.Group.created_by.return_value.count.return_value = 0
+
+
+@pytest.fixture
+def group_with_two_users(db_session, factories):
+    """
+    Create a group with two members and an annotation created by each.
+    """
+    user = factories.User()
+    other_user = factories.User()
+
+    group = Group(authority=user.authority, creator=user, members=[user, other_user],
+                  name='test', pubid='group_with_two_users')
+    db_session.add(group)
+
+    doc = Document(web_uri='https://example.org')
+    user_ann = Annotation(userid=user.userid, groupid=group.pubid, document=doc)
+    other_user_ann = Annotation(userid=other_user.userid, groupid=group.pubid,
+                                document=doc)
+    db_session.add(user_ann)
+    db_session.add(other_user_ann)
+    db_session.flush()
+
+    return (group, user, other_user, user_ann, other_user_ann)

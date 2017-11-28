@@ -141,10 +141,7 @@ def delete_user(request, user):
     message.
     """
 
-    if models.Group.created_by(request.db, user).count() > 0:
-        raise UserDeletionError('Cannot delete user who is a group creator.')
-
-    user.groups = []
+    # Delete the user's annotations.
     annotations = request.db.query(models.Annotation) \
                             .filter_by(userid=user.userid)
     for annotation in annotations:
@@ -152,6 +149,22 @@ def delete_user(request, user):
         event = AnnotationEvent(request, annotation.id, 'delete')
         request.notify_after_commit(event)
 
+    # Delete groups created by this user which are now empty.
+    empty_groups = []
+    for group in user.groups:
+        anns = request.db.query(models.Annotation) \
+                         .filter_by(groupid=group.pubid,
+                                    deleted=False)
+        if anns.count() > 0:
+            group.creator = None
+        else:
+            empty_groups.append(group)
+
+    for group in empty_groups:
+        request.db.delete(group)
+    user.groups = []
+
+    # Delete the user.
     request.db.delete(user)
 
 
