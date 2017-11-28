@@ -129,6 +129,9 @@ def user_not_found(exc, request):
 def delete_user(request, user):
     """
     Deletes a user with all their group memberships and annotations.
+
+    Any groups created by the user, which are empty after deleting the user's
+    own annotations, are removed. Other groups created by the user are kept.
     """
 
     # Delete the user's annotations.
