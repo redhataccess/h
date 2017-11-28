@@ -8,7 +8,6 @@ from mock import MagicMock
 from mock import call
 from pyramid import httpexceptions
 import pytest
-from sqlalchemy import inspect
 
 from h.events import AnnotationEvent
 from h.services.annotation_stats import AnnotationStatsService
@@ -216,9 +215,8 @@ def test_delete_user_removes_empty_groups(db_session, group_with_two_users, pyra
     db_session.delete(other_user_ann)
 
     delete_user(pyramid_request, user)
-    pyramid_request.db.flush()   # See https://stackoverflow.com/a/25427235/434243
 
-    assert inspect(group).deleted is True
+    assert group in db_session.deleted
 
 
 def test_delete_user_keeps_non_empty_groups(db_session, group_with_two_users, pyramid_request):
@@ -226,10 +224,9 @@ def test_delete_user_keeps_non_empty_groups(db_session, group_with_two_users, py
     (group, user, other_user, user_ann, other_user_ann) = group_with_two_users
 
     delete_user(pyramid_request, user)
-    pyramid_request.db.flush()  # See https://stackoverflow.com/a/25427235/434243
 
-    assert inspect(group).deleted is False
-    assert inspect(other_user_ann).deleted is False
+    assert group not in db_session.deleted
+    assert other_user_ann not in db_session.deleted
 
 
 def test_delete_user_unsets_non_empty_group_creator(db_session, group_with_two_users, pyramid_request):
