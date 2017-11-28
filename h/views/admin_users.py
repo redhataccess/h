@@ -15,10 +15,6 @@ from h.tasks.admin import rename_user
 from h.i18n import TranslationString as _  # noqa
 
 
-class UserDeletionError(Exception):
-    pass
-
-
 class UserNotFoundError(Exception):
     pass
 
@@ -116,12 +112,9 @@ def users_rename(request):
 def users_delete(request):
     user = _form_request_user(request)
 
-    try:
-        delete_user(request, user)
-        request.session.flash(
-            'Successfully deleted user %s with authority %s' % (user.username, user.authority), 'success')
-    except UserDeletionError as e:
-        request.session.flash(str(e), 'error')
+    delete_user(request, user)
+    request.session.flash(
+        'Successfully deleted user %s with authority %s' % (user.username, user.authority), 'success')
 
     return httpexceptions.HTTPFound(
         location=request.route_path('admin_users'))
@@ -136,9 +129,6 @@ def user_not_found(exc, request):
 def delete_user(request, user):
     """
     Deletes a user with all their group memberships and annotations.
-
-    Raises UserDeletionError when deletion fails with the appropriate error
-    message.
     """
 
     # Delete the user's annotations.

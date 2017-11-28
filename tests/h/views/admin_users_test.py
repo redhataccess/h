@@ -15,7 +15,6 @@ from h.services.annotation_stats import AnnotationStatsService
 from h.services.user import UserService
 from h.models import Annotation, Document, Group
 from h.views.admin_users import (
-    UserDeletionError,
     UserNotFoundError,
     delete_user,
     users_activate,
@@ -209,21 +208,6 @@ def test_users_delete_deletes_user(user_service, fake_delete_user, pyramid_reque
     users_delete(pyramid_request)
 
     fake_delete_user.assert_called_once_with(pyramid_request, user)
-
-
-@users_delete_fixtures
-def test_users_delete_group_creator_error(user_service, fake_delete_user, pyramid_request):
-    pyramid_request.params = {"userid": "acct:bob@example.com"}
-    user = MagicMock()
-
-    user_service.fetch.return_value = user
-    fake_delete_user.side_effect = UserDeletionError('group creator error')
-
-    users_delete(pyramid_request)
-
-    assert pyramid_request.session.peek_flash('error') == [
-        'group creator error'
-    ]
 
 
 def test_delete_user_removes_empty_groups(db_session, group_with_two_users, pyramid_request):
